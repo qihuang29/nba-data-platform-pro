@@ -1,0 +1,282 @@
+{% extends "base.html" %}
+
+{% block title %}数据仪表盘 - NBA数据分析平台 Pro{% endblock %}
+{% block page_title %}数据仪表盘{% endblock %}
+{% block page_subtitle %}2022-23赛季NBA球员数据全景概览{% endblock %}
+
+{% block content %}
+<!-- 统计卡片 -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-label">👥 球员总数</div>
+        <div class="stat-value gradient">{{ stats.total_players }}</div>
+        <div class="stat-sub">覆盖 {{ stats.total_players }} 名注册球员</div>
+        <div class="stat-icon">🏀</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">💰 平均薪资</div>
+        <div class="stat-value">${{ "%.2f"|format(stats.avg_salary / 1e6) }}M</div>
+        <div class="stat-sub">全联盟平均年薪</div>
+        <div class="stat-icon">💵</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">👑 最高薪资</div>
+        <div class="stat-value">${{ "%.2f"|format(stats.max_salary / 1e6) }}M</div>
+        <div class="stat-sub">{{ stats.max_player }}</div>
+        <div class="stat-icon">🏆</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">📊 场均得分</div>
+        <div class="stat-value">{{ "%.1f"|format(stats.avg_pts) }}</div>
+        <div class="stat-sub">联盟场均得分</div>
+        <div class="stat-icon">📈</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">🤖 模型R²</div>
+        <div class="stat-value gradient">{{ "%.4f"|format(stats.model_r2) }}</div>
+        <div class="stat-sub">XGBoost薪资预测模型</div>
+        <div class="stat-icon">🎯</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">📉 预测MAE</div>
+        <div class="stat-value">${{ "%.2f"|format(stats.model_mae / 1e6) }}M</div>
+        <div class="stat-sub">平均绝对误差</div>
+        <div class="stat-icon">📐</div>
+    </div>
+</div>
+
+<!-- 图表区域 -->
+<div class="grid-2" style="margin-bottom: 24px;">
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">📊 薪资分布</span>
+            <span class="badge badge-primary">直方图</span>
+        </div>
+        <div id="salaryDistChart" class="chart-container small"></div>
+    </div>
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">📍 得分 vs 薪资</span>
+            <span class="badge badge-secondary">散点图</span>
+        </div>
+        <div id="ptsSalaryChart" class="chart-container small"></div>
+    </div>
+</div>
+
+<div class="grid-2" style="margin-bottom: 24px;">
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">🏢 各球队薪资总额</span>
+            <span class="badge badge-warning">柱状图</span>
+        </div>
+        <div id="teamSalaryChart" class="chart-container"></div>
+    </div>
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">🎂 年龄与薪资关系</span>
+            <span class="badge badge-info">折线图</span>
+        </div>
+        <div id="ageSalaryChart" class="chart-container"></div>
+    </div>
+</div>
+
+<!-- Top10 榜单 -->
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">💰 薪资排行榜 Top 10</span>
+            <a href="{{ url_for('players') }}" class="card-action">查看全部 →</a>
+        </div>
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>球员</th>
+                        <th>球队</th>
+                        <th>位置</th>
+                        <th>得分</th>
+                        <th>薪资</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in top10_salary %}
+                    <tr>
+                        <td><span class="badge {% if loop.index <= 3 %}badge-warning{% else %}badge-primary{% endif %}">{{ loop.index }}</span></td>
+                        <td class="player-name"><div>{{ p['Player_CN'] }}</div><div style="font-size:11px;color:var(--text-muted);">{{ p['Player Name'] }}</div></td>
+                        <td><span class="team-badge">{{ p['Team'] }}</span></td>
+                        <td>{{ p['Position'] }}</td>
+                        <td class="highlight">{{ "%.1f"|format(p['PTS']) }}</td>
+                        <td class="salary">${{ "%.2f"|format(p['Salary'] / 1e6) }}M</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">🔥 得分排行榜 Top 10</span>
+            <a href="{{ url_for('players') }}" class="card-action">查看全部 →</a>
+        </div>
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>球员</th>
+                        <th>球队</th>
+                        <th>位置</th>
+                        <th>得分</th>
+                        <th>薪资</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in top10_pts %}
+                    <tr>
+                        <td><span class="badge {% if loop.index <= 3 %}badge-danger{% else %}badge-primary{% endif %}">{{ loop.index }}</span></td>
+                        <td class="player-name"><div>{{ p['Player_CN'] }}</div><div style="font-size:11px;color:var(--text-muted);">{{ p['Player Name'] }}</div></td>
+                        <td><span class="team-badge">{{ p['Team'] }}</span></td>
+                        <td>{{ p['Position'] }}</td>
+                        <td class="highlight">{{ "%.1f"|format(p['PTS']) }}</td>
+                        <td class="salary">${{ "%.2f"|format(p['Salary'] / 1e6) }}M</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 功能快捷入口 -->
+<div class="card" style="margin-top: 20px;">
+    <div class="card-header">
+        <span class="card-title">🚀 功能导航</span>
+        <span class="card-action">探索更多功能</span>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px;">
+        <a href="{{ url_for('news') }}" style="display: flex; flex-direction: column; align-items: center; padding: 24px 16px; background: var(--bg-input); border-radius: 12px; text-decoration: none; color: inherit; transition: all 0.2s; border: 1px solid transparent;">
+            <span style="font-size: 36px; margin-bottom: 10px;">📰</span>
+            <span style="font-weight: 600; font-size: 15px; margin-bottom: 4px;">篮球资讯</span>
+            <span style="font-size: 12px; color: var(--text-muted);">最新NBA新闻一键获取</span>
+        </a>
+        <a href="{{ url_for('teaching') }}" style="display: flex; flex-direction: column; align-items: center; padding: 24px 16px; background: var(--bg-input); border-radius: 12px; text-decoration: none; color: inherit; transition: all 0.2s; border: 1px solid transparent;">
+            <span style="font-size: 36px; margin-bottom: 10px;">🎓</span>
+            <span style="font-weight: 600; font-size: 15px; margin-bottom: 4px;">篮球教学</span>
+            <span style="font-size: 12px; color: var(--text-muted);">8大分类系统教学</span>
+        </a>
+        <a href="{{ url_for('ai_chat') }}" style="display: flex; flex-direction: column; align-items: center; padding: 24px 16px; background: var(--bg-input); border-radius: 12px; text-decoration: none; color: inherit; transition: all 0.2s; border: 1px solid transparent;">
+            <span style="font-size: 36px; margin-bottom: 10px;">💬</span>
+            <span style="font-weight: 600; font-size: 15px; margin-bottom: 4px;">AI智能助手</span>
+            <span style="font-size: 12px; color: var(--text-muted);">DeepSeek深度问答</span>
+        </a>
+        <a href="{{ url_for('forum') }}" style="display: flex; flex-direction: column; align-items: center; padding: 24px 16px; background: var(--bg-input); border-radius: 12px; text-decoration: none; color: inherit; transition: all 0.2s; border: 1px solid transparent;">
+            <span style="font-size: 36px; margin-bottom: 10px;">🏛️</span>
+            <span style="font-weight: 600; font-size: 15px; margin-bottom: 4px;">篮球论坛</span>
+            <span style="font-size: 12px; color: var(--text-muted);">球迷交流讨论社区</span>
+        </a>
+        <a href="{{ url_for('prediction') }}" style="display: flex; flex-direction: column; align-items: center; padding: 24px 16px; background: var(--bg-input); border-radius: 12px; text-decoration: none; color: inherit; transition: all 0.2s; border: 1px solid transparent;">
+            <span style="font-size: 36px; margin-bottom: 10px;">🤖</span>
+            <span style="font-weight: 600; font-size: 15px; margin-bottom: 4px;">薪资预测</span>
+            <span style="font-size: 12px; color: var(--text-muted);">XGBoost模型预测</span>
+        </a>
+        <a href="{{ url_for('visualization') }}" style="display: flex; flex-direction: column; align-items: center; padding: 24px 16px; background: var(--bg-input); border-radius: 12px; text-decoration: none; color: inherit; transition: all 0.2s; border: 1px solid transparent;">
+            <span style="font-size: 36px; margin-bottom: 10px;">📈</span>
+            <span style="font-weight: 600; font-size: 15px; margin-bottom: 4px;">数据可视化</span>
+            <span style="font-size: 12px; color: var(--text-muted);">8种图表多维分析</span>
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 薪资分布直方图
+    loadChart('salaryDistChart', 'salary_distribution', function(data) {
+        return {
+            tooltip: { trigger: 'axis', formatter: '{b}<br/>球员数: {c}' },
+            xAxis: { type: 'category', data: data.labels },
+            yAxis: { type: 'value', name: '球员数' },
+            series: [{
+                type: 'bar',
+                data: data.values,
+                itemStyle: {
+                    color: gradientColors.blue,
+                    borderRadius: [4, 4, 0, 0]
+                },
+                barWidth: '60%'
+            }]
+        };
+    });
+
+    // 得分vs薪资散点图
+    loadChart('ptsSalaryChart', 'pts_vs_salary', function(data) {
+        return {
+            tooltip: {
+                trigger: 'item',
+                formatter: function(p) {
+                    return `<b>${p.data.name}</b><br/>球队: ${p.data.team}<br/>位置: ${p.data.position}<br/>得分: ${p.data.x}<br/>薪资: $${p.data.y}M`;
+                }
+            },
+            xAxis: { type: 'value', name: '场均得分', splitLine: { lineStyle: { color: '#1e293b', type: 'dashed' } } },
+            yAxis: { type: 'value', name: '薪资(M$)', splitLine: { lineStyle: { color: '#1e293b', type: 'dashed' } } },
+            series: [{
+                type: 'scatter',
+                data: data.data.map(d => [d.x, d.y, d]),
+                symbolSize: 10,
+                itemStyle: {
+                    color: 'rgba(59, 130, 246, 0.6)',
+                    borderColor: '#3b82f6',
+                    borderWidth: 1
+                }
+            }]
+        };
+    });
+
+    // 球队薪资柱状图
+    loadChart('teamSalaryChart', 'team_salary', function(data) {
+        return {
+            tooltip: { trigger: 'axis', formatter: '{b}<br/>薪资总额: ${c}M' },
+            grid: { left: '3%', right: '4%', bottom: '15%', top: '10%', containLabel: true },
+            xAxis: {
+                type: 'category',
+                data: data.teams,
+                axisLabel: { rotate: 45, fontSize: 10 }
+            },
+            yAxis: { type: 'value', name: '薪资总额(M$)' },
+            series: [{
+                type: 'bar',
+                data: data.total_salary,
+                itemStyle: {
+                    color: function(params) {
+                        return colorPalette[params.dataIndex % colorPalette.length];
+                    },
+                    borderRadius: [4, 4, 0, 0]
+                }
+            }]
+        };
+    });
+
+    // 年龄与薪资折线图
+    loadChart('ageSalaryChart', 'age_salary', function(data) {
+        return {
+            tooltip: { trigger: 'axis', formatter: '{b}岁<br/>平均薪资: ${c}M' },
+            xAxis: { type: 'category', data: data.ages, name: '年龄' },
+            yAxis: { type: 'value', name: '平均薪资(M$)' },
+            series: [{
+                type: 'line',
+                data: data.avg_salary,
+                smooth: true,
+                symbol: 'circle',
+                symbolSize: 8,
+                lineStyle: { width: 3, color: '#8b5cf6' },
+                itemStyle: { color: '#8b5cf6' },
+                areaStyle: { color: gradientColors.purple }
+            }]
+        };
+    });
+});
+</script>
+{% endblock %}
