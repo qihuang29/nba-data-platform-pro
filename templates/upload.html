@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{% block title %}数据上传 - NBA数据分析平台 Pro{% endblock %}
+{% block page_title %}数据上传{% endblock %}
+{% block page_subtitle %}上传你自己的CSV/Excel数据文件进行分析{% endblock %}
+
+{% block content %}
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">📤 上传数据文件</span>
+        </div>
+        <div style="border: 2px dashed var(--border-color); border-radius: 12px; padding: 40px; text-align: center; transition: all 0.3s;"
+             id="dropZone" ondragover="event.preventDefault(); this.style.borderColor='var(--accent-primary)'; this.style.background='rgba(59,130,246,0.05)';"
+             ondragleave="this.style.borderColor='var(--border-color)'; this.style.background='transparent';"
+             ondrop="handleDrop(event)">
+            <div style="font-size: 48px; margin-bottom: 16px;">📁</div>
+            <h3 style="margin-bottom: 8px;">拖拽文件到这里</h3>
+            <p style="color: var(--text-muted); margin-bottom: 20px;">支持 CSV、XLS、XLSX 格式，最大16MB</p>
+            <input type="file" id="fileInput" accept=".csv,.xls,.xlsx" style="display: none;" onchange="handleFileSelect(event)">
+            <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
+                选择文件
+            </button>
+        </div>
+        <div id="fileInfo" style="margin-top: 16px; display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: var(--bg-input); border-radius: 8px;">
+                <span id="fileName" style="font-weight: 600;"></span>
+                <span id="fileSize" style="color: var(--text-muted); font-size: 13px;"></span>
+            </div>
+            <button class="btn btn-success btn-block" style="margin-top: 12px;" onclick="uploadFile()">
+                🚀 开始上传分析
+            </button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">📋 使用说明</span>
+        </div>
+        <div style="line-height: 2; color: var(--text-secondary);">
+            <p><strong style="color: var(--accent-primary);">1. 数据格式要求</strong></p>
+            <p style="padding-left: 16px;">• 文件格式：CSV、XLS、XLSX</p>
+            <p style="padding-left: 16px;">• 第一行为列名（表头）</p>
+            <p style="padding-left: 16px;">• 建议包含数值型列用于可视化</p>
+            <br>
+            <p><strong style="color: var(--accent-primary);">2. 分析功能</strong></p>
+            <p style="padding-left: 16px;">• 自动识别数据结构</p>
+            <p style="padding-left: 16px;">• 生成描述性统计</p>
+            <p style="padding-left: 16px;">• 交互式图表可视化</p>
+            <br>
+            <p><strong style="color: var(--accent-primary);">3. 示例数据</strong></p>
+            <p style="padding-left: 16px;">你可以使用平台内置的NBA球员数据进行体验，无需上传。</p>
+        </div>
+    </div>
+</div>
+
+<!-- 上传结果 -->
+<div id="uploadResult" style="margin-top: 20px; display: none;">
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">📊 数据分析结果</span>
+        </div>
+        <div id="resultContent"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let selectedFile = null;
+
+function handleFileSelect(event) {
+    const file = event.target.files[0];
+    if (file) showFileInfo(file);
+}
+
+function handleDrop(event) {
+    event.preventDefault();
+    document.getElementById('dropZone').style.borderColor = 'var(--border-color)';
+    document.getElementById('dropZone').style.background = 'transparent';
+    const file = event.dataTransfer.files[0];
+    if (file) showFileInfo(file);
+}
+
+function showFileInfo(file) {
+    selectedFile = file;
+    document.getElementById('fileInfo').style.display = 'block';
+    document.getElementById('fileName').textContent = file.name;
+    document.getElementById('fileSize').textContent = (file.size / 1024).toFixed(1) + ' KB';
+}
+
+async function uploadFile() {
+    if (!selectedFile) return;
+
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+
+    showToast('正在上传...', 'info');
+
+    try {
+        const response = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await response.json();
+
+        if (response.ok) {
+            showToast('上传成功！', 'success');
+            displayResult(data);
+        } else {
+            showToast('上传失败: ' + (data.error || '未知错误'), 'error');
+        }
+    } catch (error) {
+        showToast('上传失败: ' + error.message, 'error');
+    }
+}
+
+function displayResult(data) {
+    document.getElementById('uploadResult').style.display = 'block';
+    const content = document.getElementById('resultContent');
+
+    let html = `<div class="metrics-grid" style="margin-bottom: 20px;">
+        <div class="metric-item"><div class="label">行数</div><div class="value">${data.rows || 0}</div></div>
+        <div class="metric-item"><div class="label">列数</div><div class="value">${data.columns || 0}</div></div>
+    </div>`;
+
+    if (data.preview) {
+        html += '<h4 style="margin-bottom: 12px;">数据预览（前5行）</h4>';
+        html += '<div class="table-container"><table class="data-table"><thead><tr>';
+        data.preview.columns.forEach(col => {
+            html += `<th>${col}</th>`;
+        });
+        html += '</tr></thead><tbody>';
+        data.preview.data.forEach(row => {
+            html += '<tr>';
+            row.forEach(cell => {
+                html += `<td>${cell}</td>`;
+            });
+            html += '</tr>';
+        });
+        html += '</tbody></table></div>';
+    }
+
+    content.innerHTML = html;
+}
+</script>
+{% endblock %}

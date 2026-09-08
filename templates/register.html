@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>注册 - NBA数据分析平台 Pro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="auth-page">
+        <div class="auth-card">
+            <div class="auth-header">
+                <div class="logo-icon">🏀</div>
+                <h2>创建账号</h2>
+                <p>加入NBA数据分析平台 Pro</p>
+            </div>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <form method="POST">
+                <div class="form-group">
+                    <label class="form-label">用户名</label>
+                    <input type="text" name="username" class="form-input" placeholder="请输入用户名" required autofocus>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">邮箱（选填）</label>
+                    <input type="email" name="email" class="form-input" placeholder="请输入邮箱">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">密码</label>
+                    <input type="password" name="password" class="form-input" placeholder="请输入密码（至少6位）" required minlength="6">
+                </div>
+                <button type="submit" class="btn btn-primary btn-lg btn-block" style="margin-top: 10px;">
+                    ✨ 注册
+                </button>
+            </form>
+
+            <div class="auth-footer">
+                已有账号？<a href="{{ url_for('login') }}">立即登录</a>
+                <br><br>
+                <a href="{{ url_for('index') }}" style="font-size: 12px;">← 返回首页</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
