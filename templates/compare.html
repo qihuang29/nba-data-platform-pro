@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+
+{% block title %}球员对比 - NBA数据分析平台 Pro{% endblock %}
+{% block page_title %}球员对比{% endblock %}
+{% block page_subtitle %}选择两名球员进行全方位数据对比{% endblock %}
+
+{% block content %}
+<!-- 球员选择 -->
+<div class="card" style="margin-bottom: 20px;">
+    <div class="card-header">
+        <span class="card-title">⚔️ 选择对比球员</span>
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr auto 1fr; gap: 20px; align-items: end;">
+        <div>
+            <label style="display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 8px;">球员 A</label>
+            <input type="text" id="playerASearch" class="form-input" placeholder="搜索球员..." autocomplete="off" style="width: 100%;">
+            <div id="playerASuggestions" style="position: absolute; z-index: 100; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; max-height: 200px; overflow-y: auto; display: none; width: calc(100% - 40px);"></div>
+            <div id="playerASelected" style="margin-top: 10px; padding: 12px; background: var(--bg-input); border-radius: 8px; display: none;">
+                <div style="font-weight: 600;" id="playerAName"></div>
+                <div style="font-size: 12px; color: var(--text-muted);" id="playerATeam"></div>
+            </div>
+        </div>
+        <div style="font-size: 32px; font-weight: 700; color: var(--accent-primary); padding-bottom: 20px;">VS</div>
+        <div>
+            <label style="display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 8px;">球员 B</label>
+            <input type="text" id="playerBSearch" class="form-input" placeholder="搜索球员..." autocomplete="off" style="width: 100%;">
+            <div id="playerBSuggestions" style="position: absolute; z-index: 100; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; max-height: 200px; overflow-y: auto; display: none; width: calc(100% - 40px);"></div>
+            <div id="playerBSelected" style="margin-top: 10px; padding: 12px; background: var(--bg-input); border-radius: 8px; display: none;">
+                <div style="font-weight: 600;" id="playerBName"></div>
+                <div style="font-size: 12px; color: var(--text-muted);" id="playerBTeam"></div>
+            </div>
+        </div>
+    </div>
+    <div style="text-align: center; margin-top: 20px;">
+        <button class="btn btn-primary" id="compareBtn" onclick="startCompare()" disabled style="padding: 10px 40px; font-size: 15px;">
+            📊 开始对比
+        </button>
+    </div>
+</div>
+
+<!-- 对比结果 -->
+<div id="compareResult" style="display: none;">
+    <!-- 雷达图 -->
+    <div class="card" style="margin-bottom: 20px;">
+        <div class="card-header">
+            <span class="card-title">🎯 能力雷达图</span>
+        </div>
+        <div id="radarChart" style="width: 100%; height: 400px;"></div>
+    </div>
+
+    <!-- 数据对比表格 -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">📋 详细数据对比</span>
+        </div>
+        <div class="table-container">
+            <table class="data-table" id="compareTable">
+                <thead>
+                    <tr>
+                        <th>数据项</th>
+                        <th id="thPlayerA" style="text-align: center;">球员 A</th>
+                        <th style="text-align: center;">优势</th>
+                        <th id="thPlayerB" style="text-align: center;">球员 B</th>
+                    </tr>
+                </thead>
+                <tbody id="compareTbody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let playerA = null;
+let playerB = null;
+let allPlayers = [];
+
+// 加载球员列表
+fetch('/api/players?page=1&per_page=500')
+    .then(r => r.json())
+    .then(data => {
+        allPlayers = data.data;
+    });
+
+// 搜索建议
+function setupSearch(inputId, suggestionsId, selectedId, playerKey) {
+    const input = document.getElementById(inputId);
+    const suggestions = document.getElementById(suggestionsId);
+    const selected = document.getElementById(selectedId);
+
+    input.addEventListener('input', function() {
+        const query = this.value.toLowerCase();
+        if (query.length < 1) {
+            suggestions.style.display = 'none';
+            return;
+        }
+        const matches = allPlayers.filter(p => 
+            (p['Player Name'] && p['Player Name'].toLowerCase().includes(query)) ||
+            (p['Player_CN'] && p['Player_CN'].includes(query))
+        ).slice(0, 8);
+        
+        if (matches.length > 0) {
+            suggestions.innerHTML = matches.map(p => 
+                `<div style="padding: 10px 14px; cursor: pointer; border-bottom: 1px solid var(--border-color);" 
+                    onclick="selectPlayer('${playerKey}', '${p['Player Name'].replace(/'/g, "\\'")}')">
+                    <div style="font-weight: 500;">${p['Player_CN'] || p['Player Name']}</div>
+                    <div style="font-size: 11px; color: var(--text-muted);">${p['Player Name']} · ${p['Team']}</div>
+                </div>`
+            ).join('');
+            suggestions.style.display = 'block';
+        } else {
+            suggestions.style.display = 'none';
+        }
+    });
+
+    document.addEventListener('click', function(e) {
+        if (!input.contains(e.target) && !suggestions.contains(e.target)) {
+            suggestions.style.display = 'none';
+        }
+    });
+}
+
+function selectPlayer(key, name) {
+    const player = allPlayers.find(p => p['Player Name'] === name);
+    if (key === 'A') {
+        playerA = player;
+        document.getElementById('playerASearch').value = '';
+        document.getElementById('playerASuggestions').style.display = 'none';
+        document.getElementById('playerASelected').style.display = 'block';
+        document.getElementById('playerAName').textContent = player['Player_CN'] || player['Player Name'];
+        document.getElementById('playerATeam').textContent = player['Player Name'] + ' · ' + player['Team'];
+    } else {
+        playerB = player;
+        document.getElementById('playerBSearch').value = '';
+        document.getElementById('playerBSuggestions').style.display = 'none';
+        document.getElementById('playerBSelected').style.display = 'block';
+        document.getElementById('playerBName').textContent = player['Player_CN'] || player['Player Name'];
+        document.getElementById('playerBTeam').textContent = player['Player Name'] + ' · ' + player['Team'];
+    }
+    document.getElementById('compareBtn').disabled = !(playerA && playerB);
+}
+
+setupSearch('playerASearch', 'playerASuggestions', 'playerASelected', 'A');
+setupSearch('playerBSearch', 'playerBSuggestions', 'playerBSelected', 'B');
+
+function startCompare() {
+    if (!playerA || !playerB) return;
+    
+    document.getElementById('compareResult').style.display = 'block';
+    document.getElementById('thPlayerA').textContent = playerA['Player_CN'] || playerA['Player Name'];
+    document.getElementById('thPlayerB').textContent = playerB['Player_CN'] || playerB['Player Name'];
+    
+    // 渲染对比表格
+    const stats = [
+        { label: '得分', key: 'PTS', higher: true },
+        { label: '篮板', key: 'TRB', higher: true },
+        { label: '助攻', key: 'AST', higher: true },
+        { label: '抢断', key: 'STL', higher: true },
+        { label: '盖帽', key: 'BLK', higher: true },
+        { label: '命中率', key: 'FG%', higher: true, percent: true },
+        { label: '三分命中率', key: '3P%', higher: true, percent: true },
+        { label: '罚球命中率', key: 'FT%', higher: true, percent: true },
+        { label: '场均时间', key: 'MP', higher: false },
+        { label: 'PER效率值', key: 'PER', higher: true },
+        { label: 'WS胜利贡献', key: 'WS', higher: true },
+        { label: 'VORP', key: 'VORP', higher: true },
+        { label: '年薪', key: 'Salary', higher: false, salary: true },
+    ];
+    
+    const tbody = document.getElementById('compareTbody');
+    tbody.innerHTML = stats.map(s => {
+        const valA = playerA[s.key];
+        const valB = playerB[s.key];
+        let displayA = valA != null ? (s.percent ? valA + '%' : s.salary ? '$' + (valA/1e6).toFixed(2) + 'M' : valA) : '-';
+        let displayB = valB != null ? (s.percent ? valB + '%' : s.salary ? '$' + (valB/1e6).toFixed(2) + 'M' : valB) : '-';
+        let advantage = '-';
+        let classA = '';
+        let classB = '';
+        if (valA != null && valB != null && !isNaN(valA) && !isNaN(valB)) {
+            if (s.higher) {
+                if (valA > valB) { advantage = 'A'; classA = 'highlight'; }
+                else if (valB > valA) { advantage = 'B'; classB = 'highlight'; }
+            } else {
+                if (valA < valB) { advantage = 'A'; classA = 'highlight'; }
+                else if (valB < valA) { advantage = 'B'; classB = 'highlight'; }
+            }
+        }
+        return `<tr>
+            <td style="font-weight: 500;">${s.label}</td>
+            <td style="text-align: center; font-weight: 600;" class="${classA}">${displayA}</td>
+            <td style="text-align: center; color: var(--text-muted);">${advantage}</td>
+            <td style="text-align: center; font-weight: 600;" class="${classB}">${displayB}</td>
+        </tr>`;
+    }).join('');
+    
+    // 渲染雷达图
+    const radarChart = echarts.init(document.getElementById('radarChart'), EChartsTheme);
+    const radarData = [
+        { name: '得分', key: 'PTS' },
+        { name: '篮板', key: 'TRB' },
+        { name: '助攻', key: 'AST' },
+        { name: '抢断', key: 'STL' },
+        { name: '盖帽', key: 'BLK' },
+        { name: 'PER', key: 'PER' },
+    ];
+    
+    // 归一化数据
+    const maxVals = {};
+    radarData.forEach(d => {
+        maxVals[d.key] = Math.max(playerA[d.key] || 0, playerB[d.key] || 0, 1);
+    });
+    
+    radarChart.setOption({
+        tooltip: {},
+        legend: {
+            data: [playerA['Player_CN'] || playerA['Player Name'], playerB['Player_CN'] || playerB['Player Name']],
+            bottom: 10
+        },
+        radar: {
+            indicator: radarData.map(d => ({ name: d.name, max: maxVals[d.key] * 1.1 })),
+            shape: 'polygon',
+            splitArea: { areaStyle: { color: ['rgba(59,130,246,0.05)', 'rgba(59,130,246,0.1)'] } }
+        },
+        series: [{
+            type: 'radar',
+            data: [
+                {
+                    value: radarData.map(d => playerA[d.key] || 0),
+                    name: playerA['Player_CN'] || playerA['Player Name'],
+                    areaStyle: { color: 'rgba(59,130,246,0.3)' },
+                    lineStyle: { color: '#3b82f6' },
+                    itemStyle: { color: '#3b82f6' }
+                },
+                {
+                    value: radarData.map(d => playerB[d.key] || 0),
+                    name: playerB['Player_CN'] || playerB['Player Name'],
+                    areaStyle: { color: 'rgba(139,92,246,0.3)' },
+                    lineStyle: { color: '#8b5cf6' },
+                    itemStyle: { color: '#8b5cf6' }
+                }
+            ]
+        }]
+    });
+    
+    window.addEventListener('resize', () => radarChart.resize());
+}
+</script>
+{% endblock %}

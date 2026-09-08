@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block title %}搜索结果 - NBA数据分析平台 Pro{% endblock %}
+{% block page_title %}搜索结果{% endblock %}
+{% block page_subtitle %}关键词："{{ query }}" · 共找到 {{ total }} 条结果{% endblock %}
+
+{% block content %}
+{% if not query %}
+<div class="empty-state">
+    <div class="icon">🔍</div>
+    <div class="text">请输入搜索关键词<br>可搜索球员、新闻、教学内容</div>
+</div>
+{% else %}
+
+<!-- 球员搜索结果 -->
+{% if players %}
+<div class="card" style="margin-bottom: 20px;">
+    <div class="card-header">
+        <span class="card-title">👥 球员 ({{ players|length }})</span>
+        <a href="{{ url_for('players') }}" class="card-action">查看全部 →</a>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px;">
+        {% for p in players %}
+        <div style="padding: 14px; background: var(--bg-input); border-radius: 10px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <div style="font-weight: 600; font-size: 14px;">{{ p.name }}</div>
+                <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+                    {{ p.team }} · {{ p.position }} · 场均{{ '%.1f'|format(p.points) }}分
+                </div>
+            </div>
+            <div style="text-align: right;">
+                <div style="font-size: 14px; font-weight: 700; color: var(--accent-primary);">${{ '%.2f'|format(p.salary/1e6) }}M</div>
+                <div style="font-size: 11px; color: var(--text-muted);">年薪</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- 新闻搜索结果 -->
+{% if news %}
+<div class="card" style="margin-bottom: 20px;">
+    <div class="card-header">
+        <span class="card-title">📰 新闻 ({{ news|length }})</span>
+        <a href="{{ url_for('news') }}" class="card-action">查看全部 →</a>
+    </div>
+    <div class="forum-list">
+        {% for n in news %}
+        <a href="{{ n.url }}" target="_blank" class="forum-item" style="text-decoration: none; color: inherit; display: block;">
+            <div class="forum-item-title" style="color: var(--text-primary);">{{ n.title }}</div>
+            <div class="forum-item-meta" style="margin-top: 6px;">
+                <span>📰 {{ n.source }}</span>
+                <span>🔗 点击查看原文</span>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- 教学搜索结果 -->
+{% if teaching %}
+<div class="card" style="margin-bottom: 20px;">
+    <div class="card-header">
+        <span class="card-title">🎓 教学 ({{ teaching|length }})</span>
+        <a href="{{ url_for('teaching') }}" class="card-action">查看全部 →</a>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px;">
+        {% for t in teaching %}
+        <a href="{{ url_for('teaching_detail', article_id=t.id) }}" style="padding: 14px; background: var(--bg-input); border-radius: 10px; text-decoration: none; color: inherit; display: block; transition: all 0.2s;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span class="badge badge-primary" style="font-size: 11px;">{{ t.category }}</span>
+            </div>
+            <div style="font-weight: 600; font-size: 14px; margin-bottom: 6px;">{{ t.title }}</div>
+            <div style="font-size: 12px; color: var(--text-muted); line-height: 1.5;">{{ t.summary[:80] }}...</div>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- 无结果 -->
+{% if total == 0 %}
+<div class="empty-state">
+    <div class="icon">😕</div>
+    <div class="text">没有找到与"{{ query }}"相关的结果<br>试试其他关键词吧</div>
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}

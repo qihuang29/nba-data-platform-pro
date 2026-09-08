@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block title %}篮球资讯 - NBA数据分析平台 Pro{% endblock %}
+{% block page_title %}篮球资讯{% endblock %}
+{% block page_subtitle %}最新NBA篮球新闻，一键获取今日热点{% endblock %}
+
+{% block content %}
+<div class="card" style="margin-bottom: 20px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+        <div>
+            <span class="badge badge-primary" id="newsCount">共 {{ news_list|length }} 条新闻</span>
+            <span class="badge badge-secondary" style="margin-left: 8px;">来源：虎扑NBA</span>
+        </div>
+        <div style="display: flex; gap: 12px; align-items: center;">
+            <span id="updateTime" style="font-size: 13px; color: var(--text-muted);">
+                {% if news_list %}
+                数据已加载
+                {% else %}
+                暂无数据，点击右侧按钮获取
+                {% endif %}
+            </span>
+            <button class="btn btn-primary" id="refreshBtn" onclick="refreshNews()">
+                🔄 一键获取今日新闻
+            </button>
+        </div>
+    </div>
+</div>
+
+<div id="newsList" class="forum-list">
+    {% if news_list %}
+        {% for news in news_list %}
+        <a href="{{ news.url }}" target="_blank" class="forum-item" style="text-decoration: none; color: inherit; display: block;">
+            <div class="forum-item-title" style="color: var(--text-primary);">
+                <span style="display: inline-block; width: 28px; height: 28px; line-height: 28px; text-align: center; background: var(--accent-primary); color: white; border-radius: 6px; font-size: 12px; font-weight: 700; margin-right: 10px;">{{ loop.index }}</span>
+                {{ news.title }}
+            </div>
+            <div class="forum-item-meta" style="margin-top: 8px;">
+                <span>📰 {{ news.source }}</span>
+                <span>🔗 点击查看原文</span>
+            </div>
+        </a>
+        {% endfor %}
+    {% else %}
+        <div class="empty-state">
+            <div class="icon">📰</div>
+            <div class="text">暂无新闻数据<br>点击上方"一键获取今日新闻"按钮加载最新资讯</div>
+        </div>
+    {% endif %}
+</div>
+
+<!-- 加载遮罩 -->
+<div id="loadingOverlay" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(10,14,23,0.7); backdrop-filter: blur(4px); z-index: 9999; display: none; align-items: center; justify-content: center;">
+    <div style="text-align: center;">
+        <div class="loading" style="width: 40px; height: 40px; border-width: 3px;"></div>
+        <div style="margin-top: 16px; color: var(--text-primary); font-size: 16px;">正在爬取最新新闻...</div>
+        <div style="margin-top: 8px; color: var(--text-muted); font-size: 13px;">从虎扑NBA获取今日热点资讯</div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function refreshNews() {
+    const btn = document.getElementById('refreshBtn');
+    const overlay = document.getElementById('loadingOverlay');
+
+    btn.disabled = true;
+    btn.innerHTML = '<div class="loading"></div> 爬取中...';
+    overlay.style.display = 'flex';
+
+    try {
+        const response = await fetch('/api/news/refresh', { method: 'POST' });
+        const data = await response.json();
+
+        if (data.success) {
+            renderNews(data.news);
+            document.getElementById('newsCount').textContent = `共 ${data.count} 条新闻`;
+            document.getElementById('updateTime').textContent = `刚刚更新 · 新增 ${data.saved} 条`;
+            showToast(`成功获取 ${data.count} 条新闻！`, 'success');
+        } else {
+            showToast('获取新闻失败: ' + (data.error || '未知错误'), 'error');
+        }
+    } catch (error) {
+        showToast('获取新闻失败: ' + error.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '🔄 一键获取今日新闻';
+        overlay.style.display = 'none';
+    }
+}
+
+function renderNews(newsList) {
+    const container = document.getElementById('newsList');
+    if (!newsList || newsList.length === 0) {
+        container.innerHTML = `<div class="empty-state"><div class="icon">📰</div><div class="text">暂无新闻数据</div></div>`;
+        return;
+    }
+
+    container.innerHTML = newsList.map((news, index) => `
+        <a href="${news.url}" target="_blank" class="forum-item" style="text-decoration: none; color: inherit; display: block;">
+            <div class="forum-item-title" style="color: var(--text-primary);">
+                <span style="display: inline-block; width: 28px; height: 28px; line-height: 28px; text-align: center; background: var(--accent-primary); color: white; border-radius: 6px; font-size: 12px; font-weight: 700; margin-right: 10px;">${index + 1}</span>
+                ${news.title}
+            </div>
+            <div class="forum-item-meta" style="margin-top: 8px;">
+                <span>📰 ${news.source || '虎扑'}</span>
+                <span>🔗 点击查看原文</span>
+            </div>
+        </a>
+    `).join('');
+}
+</script>
+{% endblock %}
