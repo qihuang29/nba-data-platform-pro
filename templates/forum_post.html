@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}{{ post.title }} - 篮球论坛{% endblock %}
+{% block page_title %}帖子详情{% endblock %}
+{% block page_subtitle %}{{ post.author.username }} 发布于 {{ post.created_at.strftime('%Y-%m-%d %H:%M') }}{% endblock %}
+
+{% block content %}
+<div class="card" style="margin-bottom: 20px;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+        <div>
+            <h2 style="font-size: 22px; margin-bottom: 8px;">{{ post.title }}</h2>
+            <div style="display: flex; gap: 16px; font-size: 13px; color: var(--text-muted);">
+                <span>👤 {{ post.author.username }}</span>
+                <span>🕐 {{ post.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                <span>👁️ {{ post.views }} 浏览</span>
+            </div>
+        </div>
+        <button class="btn btn-outline btn-sm" id="likeBtn" onclick="toggleLike({{ post.id }})">
+            👍 <span id="likeCount">{{ like_count }}</span>
+        </button>
+    </div>
+    <div style="line-height: 1.8; color: var(--text-primary); white-space: pre-wrap; font-size: 15px;">
+        {{ post.content }}
+    </div>
+</div>
+
+<!-- 评论区 -->
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">💬 评论 ({{ comments|length }})</span>
+    </div>
+
+    {% if current_user.is_authenticated %}
+    <div style="margin-bottom: 20px;">
+        <textarea id="commentInput" class="form-textarea" rows="3" placeholder="发表你的评论..."></textarea>
+        <div style="text-align: right; margin-top: 10px;">
+            <button class="btn btn-primary" onclick="submitComment({{ post.id }})">发表评论</button>
+        </div>
+    </div>
+    {% else %}
+    <div style="text-align: center; padding: 20px; color: var(--text-muted);">
+        <a href="{{ url_for('login') }}">登录</a> 后发表评论
+    </div>
+    {% endif %}
+
+    <div style="display: flex; flex-direction: column; gap: 16px;">
+        {% for comment in comments %}
+        <div style="padding: 14px; background: var(--bg-input); border-radius: 10px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                <span style="font-weight: 600; color: var(--accent-primary);">👤 {{ comment.author.username }}</span>
+                <span style="font-size: 12px; color: var(--text-muted);">{{ comment.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+            </div>
+            <div style="color: var(--text-secondary); line-height: 1.6;">{{ comment.content }}</div>
+        </div>
+        {% else %}
+        <div class="empty-state" style="padding: 30px;">
+            <div class="text">还没有评论，来抢沙发吧！</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div style="margin-top: 20px;">
+    <a href="{{ url_for('forum') }}" class="btn btn-outline">← 返回论坛列表</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function toggleLike(postId) {
+    try {
+        const result = await apiPost(`/api/forum/post/${postId}/like`, {});
+        document.getElementById('likeCount').textContent = result.count;
+        const btn = document.getElementById('likeBtn');
+        if (result.liked) {
+            btn.classList.remove('btn-outline');
+            btn.classList.add('btn-primary');
+        } else {
+            btn.classList.remove('btn-primary');
+            btn.classList.add('btn-outline');
+        }
+    } catch (error) {
+        showToast(error.message, 'error');
+    }
+}
+
+async function submitComment(postId) {
+    const content = document.getElementById('commentInput').value.trim();
+    if (!content) {
+        showToast('评论内容不能为空', 'warning');
+        return;
+    }
+    try {
+        await apiPost(`/api/forum/post/${postId}/comment`, { content });
+        showToast('评论成功！', 'success');
+        setTimeout(() => location.reload(), 800);
+    } catch (error) {
+        showToast('评论失败: ' + error.message, 'error');
+    }
+}
+</script>
+{% endblock %}

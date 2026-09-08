@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+
+{% block title %}AI智能助手 - NBA数据分析平台 Pro{% endblock %}
+{% block page_title %}AI智能助手{% endblock %}
+{% block page_subtitle %}基于DeepSeek大模型的篮球数据智能问答助手{% endblock %}
+
+{% block content %}
+<div class="card" style="padding: 0; overflow: hidden;">
+    <div class="chat-container">
+        <!-- 聊天消息区 -->
+        <div class="chat-messages" id="chatMessages">
+            <div class="chat-message ai">
+                <div class="sender">🏀 篮智AI</div>
+                你好！我是<strong>篮智AI</strong>，你的NBA篮球数据智能助手。<br><br>
+                我可以帮你：<br>
+                • 分析球员数据和表现<br>
+                • 预测球员薪资和合同价值<br>
+                • 对比不同球员和球队<br>
+                • 解读篮球战术和比赛趋势<br>
+                • 回答任何NBA相关问题<br><br>
+                有什么想了解的吗？
+            </div>
+        </div>
+
+        <!-- 快捷问题 -->
+        <div style="padding: 0 20px 12px; display: flex; flex-wrap: wrap; gap: 8px;">
+            <button class="btn btn-outline btn-sm quick-question" data-question="库里和詹姆斯谁的历史地位更高？">库里 vs 詹姆斯</button>
+            <button class="btn btn-outline btn-sm quick-question" data-question="分析一下2022-23赛季薪资最高的球员是否物有所值">薪资性价比分析</button>
+            <button class="btn btn-outline btn-sm quick-question" data-question="什么样的数据能拿到顶薪合同？">顶薪合同标准</button>
+            <button class="btn btn-outline btn-sm quick-question" data-question="新秀球员如何快速成长为全明星？">新秀成长路径</button>
+        </div>
+
+        <!-- 输入区 -->
+        <div class="chat-input-area">
+            <div class="chat-input-wrapper">
+                <input type="text" id="chatInput" class="form-input" placeholder="输入你的问题，按回车发送..." autocomplete="off">
+                <button class="btn btn-primary" id="sendBtn" onclick="sendMessage()">
+                    <span>发送</span> 🚀
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let chatHistory = [];
+let isLoading = false;
+
+const chatMessages = document.getElementById('chatMessages');
+const chatInput = document.getElementById('chatInput');
+const sendBtn = document.getElementById('sendBtn');
+
+// 发送消息
+async function sendMessage() {
+    const message = chatInput.value.trim();
+    if (!message || isLoading) return;
+
+    // 添加用户消息
+    addMessage('user', message);
+    chatInput.value = '';
+    chatHistory.push({ role: 'user', content: message });
+
+    // 显示加载状态
+    isLoading = true;
+    sendBtn.disabled = true;
+    sendBtn.innerHTML = '<div class="loading"></div>';
+
+    const loadingMsg = addMessage('ai', '<div class="loading"></div> 正在思考中...');
+
+    try {
+        const response = await apiPost('/api/ai-chat', {
+            message: message,
+            history: chatHistory
+        });
+
+        // 替换加载消息
+        loadingMsg.innerHTML = `<div class="sender">🏀 篮智AI</div>${formatAIResponse(response.response)}`;
+        chatHistory.push({ role: 'assistant', content: response.response });
+    } catch (error) {
+        loadingMsg.innerHTML = `<div class="sender">🏀 篮智AI</div><span style="color: #ef4444;">抱歉，AI服务暂时不可用：${error.message}</span>`;
+    } finally {
+        isLoading = false;
+        sendBtn.disabled = false;
+        sendBtn.innerHTML = '<span>发送</span> 🚀';
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+}
+
+// 添加消息
+function addMessage(role, content) {
+    const msgDiv = document.createElement('div');
+    msgDiv.className = `chat-message ${role}`;
+    if (role === 'user') {
+        msgDiv.innerHTML = `<div class="sender">你</div>${content}`;
+    } else {
+        msgDiv.innerHTML = content;
+    }
+    chatMessages.appendChild(msgDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+    return msgDiv;
+}
+
+// 格式化AI响应（简单的markdown处理）
+function formatAIResponse(text) {
+    return text
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/`(.+?)`/g, '<code style="background: var(--bg-input); padding: 2px 6px; border-radius: 4px; font-size: 13px;">$1</code>')
+        .replace(/\n/g, '<br>')
+        .replace(/^### (.+)$/gm, '<h4 style="margin: 12px 0 6px; color: var(--accent-primary);">$1</h4>')
+        .replace(/^## (.+)$/gm, '<h3 style="margin: 14px 0 8px; color: var(--accent-primary);">$1</h3>');
+}
+
+// 回车发送
+chatInput.addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') sendMessage();
+});
+
+// 快捷问题
+document.querySelectorAll('.quick-question').forEach(btn => {
+    btn.addEventListener('click', function() {
+        chatInput.value = this.dataset.question;
+        sendMessage();
+    });
+});
+
+// 自动聚焦
+chatInput.focus();
+</script>
+{% endblock %}
