@@ -1,0 +1,257 @@
+{% extends "base.html" %}
+
+{% block title %}数据可视化 - NBA数据分析平台 Pro{% endblock %}
+{% block page_title %}数据可视化{% endblock %}
+{% block page_subtitle %}多维度交互式数据图表，深入洞察NBA数据规律{% endblock %}
+
+{% block content %}
+<!-- 第一行：薪资分析 -->
+<div class="grid-2" style="margin-bottom: 20px;">
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">💰 薪资分布直方图</span>
+            <span class="badge badge-primary">分布分析</span>
+        </div>
+        <div id="chart1" class="chart-container"></div>
+    </div>
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">📍 各位置平均薪资</span>
+            <span class="badge badge-secondary">对比分析</span>
+        </div>
+        <div id="chart2" class="chart-container"></div>
+    </div>
+</div>
+
+<!-- 第二行：散点分析 -->
+<div class="grid-2" style="margin-bottom: 20px;">
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">📈 得分 vs 薪资散点图</span>
+            <span class="badge badge-success">相关性</span>
+        </div>
+        <div id="chart3" class="chart-container"></div>
+    </div>
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">⚡ PER效率值 vs 薪资</span>
+            <span class="badge badge-warning">相关性</span>
+        </div>
+        <div id="chart4" class="chart-container"></div>
+    </div>
+</div>
+
+<!-- 第三行：球队和年龄 -->
+<div class="grid-2" style="margin-bottom: 20px;">
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">🏢 各球队薪资总额</span>
+            <span class="badge badge-info">球队对比</span>
+        </div>
+        <div id="chart5" class="chart-container large"></div>
+    </div>
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">🎂 年龄与薪资趋势</span>
+            <span class="badge badge-primary">趋势分析</span>
+        </div>
+        <div id="chart6" class="chart-container large"></div>
+    </div>
+</div>
+
+<!-- 第四行：雷达图 -->
+<div class="card" style="margin-bottom: 20px;">
+    <div class="card-header">
+        <span class="card-title">🎯 各位置能力雷达图（归一化）</span>
+        <span class="badge badge-secondary">多维对比</span>
+    </div>
+    <div id="chart7" class="chart-container large"></div>
+</div>
+
+<!-- 第五行：特征重要性 -->
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">🔑 薪资预测模型特征重要性 Top 20</span>
+        <span class="badge badge-warning">XGBoost</span>
+    </div>
+    <div id="chart8" class="chart-container large"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 1. 薪资分布直方图
+    loadChart('chart1', 'salary_distribution', function(data) {
+        return {
+            tooltip: { trigger: 'axis', formatter: '{b}<br/>球员数: {c}人' },
+            xAxis: { type: 'category', data: data.labels, name: '薪资区间' },
+            yAxis: { type: 'value', name: '球员数' },
+            series: [{
+                type: 'bar',
+                data: data.values,
+                itemStyle: { color: gradientColors.blue, borderRadius: [6, 6, 0, 0] },
+                barWidth: '65%'
+            }]
+        };
+    });
+
+    // 2. 各位置平均薪资
+    loadChart('chart2', 'salary_by_position', function(data) {
+        return {
+            tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+            legend: { data: ['平均薪资', '薪资中位数'], top: 0 },
+            xAxis: { type: 'category', data: data.positions },
+            yAxis: { type: 'value', name: '薪资(M$)' },
+            series: [
+                {
+                    name: '平均薪资',
+                    type: 'bar',
+                    data: data.avg_salary,
+                    itemStyle: { color: gradientColors.purple, borderRadius: [4, 4, 0, 0] }
+                },
+                {
+                    name: '薪资中位数',
+                    type: 'bar',
+                    data: data.median_salary,
+                    itemStyle: { color: gradientColors.green, borderRadius: [4, 4, 0, 0] }
+                }
+            ]
+        };
+    });
+
+    // 3. 得分vs薪资散点
+    loadChart('chart3', 'pts_vs_salary', function(data) {
+        return {
+            tooltip: {
+                trigger: 'item',
+                formatter: function(p) {
+                    const d = p.data[2];
+                    return `<b>${d.name}</b><br/>${d.team} | ${d.position}<br/>得分: ${d.x}<br/>薪资: $${d.y}M`;
+                }
+            },
+            xAxis: { type: 'value', name: '场均得分' },
+            yAxis: { type: 'value', name: '薪资(M$)' },
+            series: [{
+                type: 'scatter',
+                data: data.data.map(d => [d.x, d.y, d]),
+                symbolSize: 12,
+                itemStyle: { color: 'rgba(16, 185, 129, 0.6)', borderColor: '#10b981', borderWidth: 1 }
+            }]
+        };
+    });
+
+    // 4. PER vs 薪资散点
+    loadChart('chart4', 'per_salary', function(data) {
+        return {
+            tooltip: {
+                trigger: 'item',
+                formatter: function(p) {
+                    const d = p.data[2];
+                    return `<b>${d.name}</b><br/>${d.position}<br/>PER: ${d.x}<br/>薪资: $${d.y}M`;
+                }
+            },
+            xAxis: { type: 'value', name: 'PER效率值' },
+            yAxis: { type: 'value', name: '薪资(M$)' },
+            series: [{
+                type: 'scatter',
+                data: data.data.map(d => [d.x, d.y, d]),
+                symbolSize: 12,
+                itemStyle: { color: 'rgba(245, 158, 11, 0.6)', borderColor: '#f59e0b', borderWidth: 1 }
+            }]
+        };
+    });
+
+    // 5. 球队薪资总额
+    loadChart('chart5', 'team_salary', function(data) {
+        return {
+            tooltip: { trigger: 'axis', formatter: '{b}<br/>薪资总额: ${c}M' },
+            grid: { left: '3%', right: '4%', bottom: '20%', top: '5%', containLabel: true },
+            xAxis: { type: 'category', data: data.teams, axisLabel: { rotate: 45, fontSize: 10 } },
+            yAxis: { type: 'value', name: '薪资总额(M$)' },
+            series: [{
+                type: 'bar',
+                data: data.total_salary,
+                itemStyle: {
+                    color: function(params) { return colorPalette[params.dataIndex % colorPalette.length]; },
+                    borderRadius: [4, 4, 0, 0]
+                }
+            }]
+        };
+    });
+
+    // 6. 年龄与薪资
+    loadChart('chart6', 'age_salary', function(data) {
+        return {
+            tooltip: { trigger: 'axis', formatter: '{b}岁<br/>平均薪资: ${c}M' },
+            xAxis: { type: 'category', data: data.ages, name: '年龄' },
+            yAxis: { type: 'value', name: '平均薪资(M$)' },
+            series: [{
+                type: 'line',
+                data: data.avg_salary,
+                smooth: true,
+                symbol: 'circle',
+                symbolSize: 10,
+                lineStyle: { width: 3, color: '#06b6d4' },
+                itemStyle: { color: '#06b6d4' },
+                areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                    { offset: 0, color: 'rgba(6, 182, 212, 0.5)' },
+                    { offset: 1, color: 'rgba(6, 182, 212, 0.05)' }
+                ])}
+            }]
+        };
+    });
+
+    // 7. 雷达图
+    loadChart('chart7', 'radar', function(data) {
+        const indicators = data.indicators.map(name => ({ name, max: 100 }));
+        const positions = Object.keys(data).filter(k => k !== 'indicators');
+        const series = positions.map((pos, i) => ({
+            name: pos,
+            value: data[pos],
+            areaStyle: { opacity: 0.1 },
+            lineStyle: { width: 2 },
+            itemStyle: { color: colorPalette[i % colorPalette.length] }
+        }));
+
+        return {
+            tooltip: {},
+            legend: { data: positions, bottom: 0 },
+            radar: {
+                indicator: indicators,
+                shape: 'polygon',
+                splitNumber: 4,
+                axisName: { color: '#94a3b8', fontSize: 12 },
+                splitLine: { lineStyle: { color: '#2a3548' } },
+                splitArea: { areaStyle: { color: ['rgba(26,35,50,0.3)', 'rgba(17,24,39,0.3)'] } },
+                axisLine: { lineStyle: { color: '#2a3548' } }
+            },
+            series: [{ type: 'radar', data: series }]
+        };
+    });
+
+    // 8. 特征重要性
+    loadChart('chart8', 'feature_importance', function(data) {
+        return {
+            tooltip: { trigger: 'axis', formatter: '{b}<br/>重要性: {c}' },
+            grid: { left: '3%', right: '8%', bottom: '3%', top: '3%', containLabel: true },
+            xAxis: { type: 'value' },
+            yAxis: { type: 'category', data: data.features.reverse(), axisLabel: { fontSize: 11 } },
+            series: [{
+                type: 'bar',
+                data: data.importance.reverse(),
+                itemStyle: {
+                    color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                        { offset: 0, color: 'rgba(59, 130, 246, 0.3)' },
+                        { offset: 1, color: 'rgba(239, 68, 68, 0.9)' }
+                    ]),
+                    borderRadius: [0, 4, 4, 0]
+                },
+                barWidth: '55%',
+                label: { show: true, position: 'right', color: '#94a3b8', fontSize: 10, formatter: '{c}' }
+            }]
+        };
+    });
+});
+</script>
+{% endblock %}
