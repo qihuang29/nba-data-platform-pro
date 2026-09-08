@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}篮球教学 - NBA数据分析平台 Pro{% endblock %}
+{% block page_title %}篮球教学{% endblock %}
+{% block page_subtitle %}从入门到进阶，全方位篮球教学资源库{% endblock %}
+
+{% block content %}
+<!-- 分类导航 -->
+<div class="card" style="margin-bottom: 20px;">
+    <div class="card-header">
+        <span class="card-title">📚 教学分类</span>
+        <span class="badge badge-primary">{{ articles|length }} 篇教程</span>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+        {% for cat in categories %}
+        <a href="#cat-{{ cat.id }}" class="category-card" style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: var(--bg-input); border-radius: 10px; text-decoration: none; color: var(--text-primary); transition: all 0.2s; border: 1px solid transparent;">
+            <span style="font-size: 28px;">{{ cat.icon }}</span>
+            <div>
+                <div style="font-weight: 600; font-size: 14px;">{{ cat.name }}</div>
+                <div style="font-size: 11px; color: var(--text-muted);">{{ articles|selectattr('category', 'equalto', cat.id)|list|length }} 篇教程</div>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- 各分类文章列表 -->
+{% for cat in categories %}
+<div class="card" style="margin-bottom: 20px;" id="cat-{{ cat.id }}">
+    <div class="card-header">
+        <span class="card-title">{{ cat.icon }} {{ cat.name }}</span>
+        <span class="card-action">{{ cat.description }}</span>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px;">
+        {% for article in articles if article.category == cat.id %}
+        <a href="{{ url_for('teaching_detail', article_id=article.id) }}" class="article-card" style="display: block; background: var(--bg-input); border-radius: 12px; overflow: hidden; text-decoration: none; color: inherit; transition: all 0.2s; border: 1px solid var(--border-color);">
+            <div style="height: 160px; background: linear-gradient(135deg, var(--bg-card), var(--bg-secondary)); display: flex; align-items: center; justify-content: center; font-size: 48px; position: relative; overflow: hidden;">
+                <img src="{{ article.image }}" alt="{{ article.title }}" style="width: 100%; height: 100%; object-fit: cover; opacity: 0.8;" onerror="this.style.display='none'">
+                <span style="position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.6); padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600;">{{ cat.icon }} {{ cat.name }}</span>
+            </div>
+            <div style="padding: 16px;">
+                <h3 style="font-size: 15px; font-weight: 600; margin-bottom: 8px; line-height: 1.4; min-height: 42px;">{{ article.title }}</h3>
+                <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.5; min-height: 36px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">{{ article.summary }}</p>
+                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text-muted);">
+                    <span>✍️ {{ article.author }}</span>
+                    <div style="display: flex; gap: 8px;">
+                        <span class="badge badge-primary">{{ article.level }}</span>
+                        <span>⏱️ {{ article.duration }}</span>
+                    </div>
+                </div>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endfor %}
+
+<style>
+.category-card:hover {
+    background: var(--bg-card) !important;
+    border-color: var(--accent-primary) !important;
+    transform: translateY(-2px);
+}
+.article-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    border-color: var(--accent-primary) !important;
+}
+</style>
+{% endblock %}
