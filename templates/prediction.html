@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+
+{% block title %}薪资预测 - NBA数据分析平台 Pro{% endblock %}
+{% block page_title %}薪资预测模型{% endblock %}
+{% block page_subtitle %}基于XGBoost的球员薪资智能预测，49项特征驱动{% endblock %}
+
+{% block content %}
+<div class="grid-2">
+    <!-- 左侧：输入表单 -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">🎛️ 球员参数输入</span>
+            <button class="btn btn-outline btn-sm" onclick="resetDefaults()">恢复默认</button>
+        </div>
+
+        <form id="predictionForm">
+            <h4 style="margin-bottom: 12px; color: var(--accent-primary);">基本信息</h4>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">位置</label>
+                    <select name="Position" class="form-select">
+                        {% for pos in positions %}
+                        <option value="{{ pos }}" {% if defaults.Position == pos %}selected{% endif %}>{{ pos }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">年龄</label>
+                    <input type="number" name="Age" class="form-input" value="{{ defaults.Age }}" step="1" min="18" max="45">
+                </div>
+            </div>
+
+            <h4 style="margin-bottom: 12px; color: var(--accent-primary);">出场情况</h4>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">场次 (GP)</label>
+                    <input type="number" name="GP" class="form-input" value="{{ defaults.GP }}" step="1" min="0" max="82">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">场均分钟 (MP)</label>
+                    <input type="number" name="MP" class="form-input" value="{{ defaults.MP }}" step="0.1" min="0" max="48">
+                </div>
+            </div>
+
+            <h4 style="margin-bottom: 12px; color: var(--accent-primary);">得分数据</h4>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">场均得分 (PTS)</label>
+                    <input type="number" name="PTS" class="form-input" value="{{ defaults.PTS }}" step="0.1" min="0">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">投篮命中率 (FG%)</label>
+                    <input type="number" name="FG%" class="form-input" value="{{ defaults['FG%'] }}" step="0.001" min="0" max="1">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">三分命中率 (3P%)</label>
+                    <input type="number" name="3P%" class="form-input" value="{{ defaults['3P%'] }}" step="0.001" min="0" max="1">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">罚球命中率 (FT%)</label>
+                    <input type="number" name="FT%" class="form-input" value="{{ defaults['FT%'] }}" step="0.001" min="0" max="1">
+                </div>
+            </div>
+
+            <h4 style="margin-bottom: 12px; color: var(--accent-primary);">全面数据</h4>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">篮板 (TRB)</label>
+                    <input type="number" name="TRB" class="form-input" value="{{ defaults.TRB }}" step="0.1" min="0">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">助攻 (AST)</label>
+                    <input type="number" name="AST" class="form-input" value="{{ defaults.AST }}" step="0.1" min="0">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">抢断 (STL)</label>
+                    <input type="number" name="STL" class="form-input" value="{{ defaults.STL }}" step="0.1" min="0">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">盖帽 (BLK)</label>
+                    <input type="number" name="BLK" class="form-input" value="{{ defaults.BLK }}" step="0.1" min="0">
+                </div>
+            </div>
+
+            <h4 style="margin-bottom: 12px; color: var(--accent-primary);">进阶效率</h4>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">PER</label>
+                    <input type="number" name="PER" class="form-input" value="{{ defaults.PER }}" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">WS</label>
+                    <input type="number" name="WS" class="form-input" value="{{ defaults.WS }}" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">USG%</label>
+                    <input type="number" name="USG%" class="form-input" value="{{ defaults['USG%'] }}" step="0.1" min="0" max="100">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">TS%</label>
+                    <input type="number" name="TS%" class="form-input" value="{{ defaults['TS%'] }}" step="0.001" min="0" max="1">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">BPM</label>
+                    <input type="number" name="BPM" class="form-input" value="{{ defaults.BPM }}" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">VORP</label>
+                    <input type="number" name="VORP" class="form-input" value="{{ defaults.VORP }}" step="0.1">
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-lg btn-block" style="margin-top: 20px;" id="predictBtn">
+                🚀 开始预测
+            </button>
+        </form>
+    </div>
+
+    <!-- 右侧：预测结果 -->
+    <div>
+        <!-- 预测结果卡片 -->
+        <div class="card" style="margin-bottom: 20px;">
+            <div class="card-header">
+                <span class="card-title">🎯 预测结果</span>
+                <span class="badge badge-success">XGBoost</span>
+            </div>
+            <div id="predictionResult">
+                <div class="empty-state">
+                    <div class="icon">🤖</div>
+                    <div class="text">填写左侧参数后点击"开始预测"<br/>模型将基于49项特征进行薪资预测</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 模型评估 -->
+        <div class="card" style="margin-bottom: 20px;">
+            <div class="card-header">
+                <span class="card-title">📊 模型评估指标</span>
+                <span class="badge badge-primary">测试集 (20%)</span>
+            </div>
+            <div class="metrics-grid">
+                <div class="metric-item">
+                    <div class="label">R² 决定系数</div>
+                    <div class="value">{{ "%.4f"|format(metrics.r2) }}</div>
+                </div>
+                <div class="metric-item">
+                    <div class="label">MAE 平均绝对误差</div>
+                    <div class="value">${{ "%.2f"|format(metrics.mae / 1e6) }}M</div>
+                </div>
+                <div class="metric-item">
+                    <div class="label">RMSE 均方根误差</div>
+                    <div class="value">${{ "%.2f"|format(metrics.rmse / 1e6) }}M</div>
+                </div>
+                <div class="metric-item">
+                    <div class="label">MAPE 平均绝对百分比</div>
+                    <div class="value">{{ "%.1f"|format(metrics.mape) }}%</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 特征重要性 -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">🔑 特征重要性 Top 15</span>
+                <span class="badge badge-warning">XGBoost</span>
+            </div>
+            <div id="featureImpChart" class="chart-container"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const defaults = {{ defaults|tojson }};
+
+// 重置默认值
+function resetDefaults() {
+    const form = document.getElementById('predictionForm');
+    Object.keys(defaults).forEach(key => {
+        const input = form.querySelector(`[name="${key}"]`);
+        if (input) input.value = defaults[key];
+    });
+    showToast('已恢复默认值', 'info');
+}
+
+// 表单提交
+document.getElementById('predictionForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const btn = document.getElementById('predictBtn');
+    const resultDiv = document.getElementById('predictionResult');
+
+    btn.disabled = true;
+    btn.innerHTML = '<div class="loading"></div> 预测中...';
+    resultDiv.innerHTML = `<div class="empty-state"><div class="loading"></div><div class="text">模型正在分析49项特征...</div></div>`;
+
+    // 收集表单数据
+    const formData = new FormData(this);
+    const data = {};
+    formData.forEach((value, key) => {
+        data[key] = value === '' ? null : parseFloat(value) || value;
+    });
+
+    try {
+        const result = await apiPost('/api/predict', data);
+
+        resultDiv.innerHTML = `
+            <div class="prediction-result">
+                <div class="prediction-value">$${result.prediction_m.toFixed(2)}M</div>
+                <div class="prediction-label">预测年薪（美元）</div>
+                <div class="prediction-confidence">
+                    <div class="confidence-item">
+                        <div class="label">95%置信下限</div>
+                        <div class="value">$${(result.confidence_low / 1e6).toFixed(2)}M</div>
+                    </div>
+                    <div class="confidence-item">
+                        <div class="label">95%置信上限</div>
+                        <div class="value">$${(result.confidence_high / 1e6).toFixed(2)}M</div>
+                    </div>
+                </div>
+                <div style="margin-top: 20px; padding: 12px; background: var(--bg-input); border-radius: 8px; font-size: 12px; color: var(--text-muted);">
+                    💡 模型基于2022-23赛季467名球员数据训练，使用XGBoost回归算法，R² = {{ "%.4f"|format(metrics.r2) }}
+                </div>
+            </div>
+        `;
+        showToast('预测完成！', 'success');
+    } catch (error) {
+        resultDiv.innerHTML = `<div class="empty-state"><div class="icon">❌</div><div class="text">预测失败: ${error.message}</div></div>`;
+        showToast('预测失败', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '🚀 开始预测';
+    }
+});
+
+// 特征重要性图表
+loadChart('featureImpChart', 'feature_importance', function(data) {
+    return {
+        tooltip: { trigger: 'axis', formatter: '{b}<br/>重要性: {c}' },
+        grid: { left: '3%', right: '8%', bottom: '3%', top: '3%', containLabel: true },
+        xAxis: { type: 'value', splitLine: { lineStyle: { color: '#1e293b', type: 'dashed' } } },
+        yAxis: {
+            type: 'category',
+            data: data.features.reverse(),
+            axisLabel: { fontSize: 11 }
+        },
+        series: [{
+            type: 'bar',
+            data: data.importance.reverse(),
+            itemStyle: {
+                color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                    { offset: 0, color: 'rgba(59, 130, 246, 0.4)' },
+                    { offset: 1, color: 'rgba(139, 92, 246, 0.9)' }
+                ]),
+                borderRadius: [0, 4, 4, 0]
+            },
+            barWidth: '60%',
+            label: {
+                show: true,
+                position: 'right',
+                color: '#94a3b8',
+                fontSize: 10,
+                formatter: '{c}'
+            }
+        }]
+    };
+});
+</script>
+{% endblock %}

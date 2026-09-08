@@ -1,0 +1,327 @@
+{% extends "base.html" %}
+
+{% block title %}球员数据 - NBA数据分析平台 Pro{% endblock %}
+{% block page_title %}球员数据{% endblock %}
+{% block page_subtitle %}467名球员完整数据，支持搜索、筛选、排序{% endblock %}
+
+{% block content %}
+<!-- 筛选栏 -->
+<div class="card" style="margin-bottom: 20px;">
+    <div class="filter-bar">
+        <div class="form-group search-input">
+            <input type="text" id="searchInput" class="form-input" placeholder="🔍 搜索球员姓名...">
+        </div>
+        <div class="form-group">
+            <select id="positionFilter" class="form-select">
+                <option value="all">全部位置</option>
+                {% for pos in positions %}
+                <option value="{{ pos }}">{{ pos }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <select id="teamFilter" class="form-select">
+                <option value="all">全部球队</option>
+                {% for team in teams %}
+                <option value="{{ team }}">{{ team }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <select id="sortSelect" class="form-select">
+                <option value="Salary">按薪资排序</option>
+                <option value="PTS">按得分排序</option>
+                <option value="PER">按PER排序</option>
+                <option value="WS">按WS排序</option>
+                <option value="VORP">按VORP排序</option>
+                <option value="TRB">按篮板排序</option>
+                <option value="AST">按助攻排序</option>
+                <option value="Age">按年龄排序</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <select id="orderSelect" class="form-select">
+                <option value="desc">降序</option>
+                <option value="asc">升序</option>
+            </select>
+        </div>
+    </div>
+</div>
+
+<!-- 球员表格 -->
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">👥 球员列表</span>
+        <span id="totalCount" class="badge badge-primary">共 0 名球员</span>
+    </div>
+    <div class="table-container">
+        <table class="data-table" id="playersTable">
+            <thead>
+                <tr>
+                    <th data-sort="Player Name">球员</th>
+                    <th data-sort="Team">球队</th>
+                    <th data-sort="Position">位置</th>
+                    <th data-sort="Age">年龄</th>
+                    <th data-sort="GP">场次</th>
+                    <th data-sort="MP">分钟</th>
+                    <th data-sort="PTS">得分</th>
+                    <th data-sort="TRB">篮板</th>
+                    <th data-sort="AST">助攻</th>
+                    <th data-sort="STL">抢断</th>
+                    <th data-sort="BLK">盖帽</th>
+                    <th data-sort="FG%">命中率</th>
+                    <th data-sort="3P%">三分</th>
+                    <th data-sort="PER">PER</th>
+                    <th data-sort="WS">WS</th>
+                    <th data-sort="VORP">VORP</th>
+                    <th data-sort="Salary">薪资</th>
+                </tr>
+            </thead>
+            <tbody id="playersTbody">
+                <tr><td colspan="17" style="text-align: center; padding: 40px;">
+                    <div class="loading"></div>
+                </td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="pagination" id="pagination"></div>
+</div>
+
+<!-- 球员详情模态框 -->
+<div id="playerModal" class="modal-overlay" style="display: none;">
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title" id="modalPlayerName">球员详情</span>
+            <button class="modal-close" onclick="closeModal()">×</button>
+        </div>
+        <div class="modal-body" id="modalBody">
+            <div style="text-align: center; padding: 40px;">
+                <div class="loading"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentPage = 1;
+let perPage = 20;
+let currentSort = 'Salary';
+let currentOrder = 'desc';
+
+// 加载球员数据
+async function loadPlayers() {
+    const tbody = document.getElementById('playersTbody');
+    tbody.innerHTML = `<tr><td colspan="17" style="text-align: center; padding: 40px;"><div class="loading"></div></td></tr>`;
+
+    try {
+        const data = await apiGet('/api/players', {
+            search: document.getElementById('searchInput').value,
+            position: document.getElementById('positionFilter').value,
+            team: document.getElementById('teamFilter').value,
+            sort_by: currentSort,
+            sort_order: currentOrder,
+            page: currentPage,
+            per_page: perPage
+        });
+
+        document.getElementById('totalCount').textContent = `共 ${data.total} 名球员`;
+
+        if (data.data.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="17" style="text-align: center; padding: 40px; color: #64748b;">
+                未找到匹配的球员</td></tr>`;
+            document.getElementById('pagination').innerHTML = '';
+            return;
+        }
+
+        tbody.innerHTML = data.data.map((p, i) => `
+            <tr style="cursor: pointer;" onclick="showPlayerDetail('${p['Player Name'].replace(/'/g, "\\'")}')">
+                <td class="player-name"><div>${p['Player_CN'] || p['Player Name']}</div><div style="font-size:11px;color:var(--text-muted);">${p['Player Name']}</div></td>
+                <td><span class="team-badge">${p['Team'] || '-'}</span></td>
+                <td><span class="badge badge-primary">${p['Position'] || '-'}</span></td>
+                <td>${p['Age'] || '-'}</td>
+                <td>${p['GP'] || '-'}</td>
+                <td>${formatNumber(p['MP'])}</td>
+                <td class="highlight">${formatNumber(p['PTS'])}</td>
+                <td>${formatNumber(p['TRB'])}</td>
+                <td>${formatNumber(p['AST'])}</td>
+                <td>${formatNumber(p['STL'])}</td>
+                <td>${formatNumber(p['BLK'])}</td>
+                <td>${formatPercent(p['FG%'])}</td>
+                <td>${formatPercent(p['3P%'])}</td>
+                <td class="highlight">${formatNumber(p['PER'])}</td>
+                <td>${formatNumber(p['WS'])}</td>
+                <td>${formatNumber(p['VORP'])}</td>
+                <td class="salary">${formatSalary(p['Salary'])}</td>
+            </tr>
+        `).join('');
+
+        renderPagination(data.total_pages, data.page);
+    } catch (error) {
+        tbody.innerHTML = `<tr><td colspan="17" style="text-align: center; padding: 40px; color: #ef4444;">
+            加载失败: ${error.message}</td></tr>`;
+    }
+}
+
+// 渲染分页
+function renderPagination(totalPages, current) {
+    const pag = document.getElementById('pagination');
+    let html = '';
+
+    html += `<button onclick="changePage(${current - 1})" ${current <= 1 ? 'disabled' : ''}>上一页</button>`;
+
+    const start = Math.max(1, current - 2);
+    const end = Math.min(totalPages, current + 2);
+
+    if (start > 1) {
+        html += `<button onclick="changePage(1)">1</button>`;
+        if (start > 2) html += `<span style="color: #64748b;">...</span>`;
+    }
+
+    for (let i = start; i <= end; i++) {
+        html += `<button class="${i === current ? 'active' : ''}" onclick="changePage(${i})">${i}</button>`;
+    }
+
+    if (end < totalPages) {
+        if (end < totalPages - 1) html += `<span style="color: #64748b;">...</span>`;
+        html += `<button onclick="changePage(${totalPages})">${totalPages}</button>`;
+    }
+
+    html += `<button onclick="changePage(${current + 1})" ${current >= totalPages ? 'disabled' : ''}>下一页</button>`;
+    html += `<span class="page-info">第 ${current} / ${totalPages} 页</span>`;
+
+    pag.innerHTML = html;
+}
+
+function changePage(page) {
+    currentPage = page;
+    loadPlayers();
+}
+
+// 显示球员详情
+async function showPlayerDetail(name) {
+    const modal = document.getElementById('playerModal');
+    const body = document.getElementById('modalBody');
+    document.getElementById('modalPlayerName').textContent = name;
+    modal.style.display = 'flex';
+    body.innerHTML = `<div style="text-align: center; padding: 40px;"><div class="loading"></div></div>`;
+
+    try {
+        const p = await apiGet(`/api/player/${encodeURIComponent(name)}`);
+
+        body.innerHTML = `
+            <div style="margin-bottom: 20px;">
+                <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px;">
+                    <div style="width: 60px; height: 60px; border-radius: 50%; background: var(--gradient-primary);
+                         display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 700; color: white;">
+                        ${p['Player Name'] ? p['Player Name'][0] : '?'}
+                    </div>
+                    <div>
+                        <h3 style="font-size: 22px; margin-bottom: 4px;">${p['Player_CN'] || p['Player Name']}</h3><div style="font-size: 13px; color: var(--text-muted); margin-bottom: 8px;">${p['Player Name']}</div>
+                        <div style="display: flex; gap: 8px;">
+                            <span class="badge badge-primary">${p['Position'] || '-'}</span>
+                            <span class="badge badge-secondary">${p['Team'] || '-'}</span>
+                            <span class="badge badge-warning">${p['Age'] || '-'}岁</span>
+                        </div>
+                    </div>
+                    <div style="margin-left: auto; text-align: right;">
+                        <div style="font-size: 28px; font-weight: 800; color: var(--accent-success);">
+                            ${formatSalary(p['Salary'])}
+                        </div>
+                        <div style="font-size: 12px; color: var(--text-muted);">年薪</div>
+                    </div>
+                </div>
+            </div>
+
+            <h4 style="margin-bottom: 12px; color: var(--text-secondary);">📊 基础数据</h4>
+            <div class="metrics-grid" style="margin-bottom: 24px;">
+                <div class="metric-item"><div class="label">场次</div><div class="value">${p['GP'] || '-'}</div></div>
+                <div class="metric-item"><div class="label">首发</div><div class="value">${p['GS'] || '-'}</div></div>
+                <div class="metric-item"><div class="label">分钟</div><div class="value">${formatNumber(p['MP'])}</div></div>
+                <div class="metric-item"><div class="label">得分</div><div class="value">${formatNumber(p['PTS'])}</div></div>
+                <div class="metric-item"><div class="label">篮板</div><div class="value">${formatNumber(p['TRB'])}</div></div>
+                <div class="metric-item"><div class="label">助攻</div><div class="value">${formatNumber(p['AST'])}</div></div>
+                <div class="metric-item"><div class="label">抢断</div><div class="value">${formatNumber(p['STL'])}</div></div>
+                <div class="metric-item"><div class="label">盖帽</div><div class="value">${formatNumber(p['BLK'])}</div></div>
+                <div class="metric-item"><div class="label">失误</div><div class="value">${formatNumber(p['TOV'])}</div></div>
+                <div class="metric-item"><div class="label">犯规</div><div class="value">${formatNumber(p['PF'])}</div></div>
+            </div>
+
+            <h4 style="margin-bottom: 12px; color: var(--text-secondary);">🎯 效率数据</h4>
+            <div class="metrics-grid" style="margin-bottom: 24px;">
+                <div class="metric-item"><div class="label">PER</div><div class="value">${formatNumber(p['PER'])}</div></div>
+                <div class="metric-item"><div class="label">TS%</div><div class="value">${formatPercent(p['TS%'])}</div></div>
+                <div class="metric-item"><div class="label">USG%</div><div class="value">${formatPercent(p['USG%'])}</div></div>
+                <div class="metric-item"><div class="label">WS</div><div class="value">${formatNumber(p['WS'])}</div></div>
+                <div class="metric-item"><div class="label">WS/48</div><div class="value">${formatNumber(p['WS/48'], 3)}</div></div>
+                <div class="metric-item"><div class="label">BPM</div><div class="value">${formatNumber(p['BPM'])}</div></div>
+                <div class="metric-item"><div class="label">VORP</div><div class="value">${formatNumber(p['VORP'])}</div></div>
+                <div class="metric-item"><div class="label">命中率</div><div class="value">${formatPercent(p['FG%'])}</div></div>
+                <div class="metric-item"><div class="label">三分率</div><div class="value">${formatPercent(p['3P%'])}</div></div>
+                <div class="metric-item"><div class="label">罚球率</div><div class="value">${formatPercent(p['FT%'])}</div></div>
+            </div>
+        `;
+    } catch (error) {
+        body.innerHTML = `<div style="text-align: center; padding: 40px; color: #ef4444;">加载失败: ${error.message}</div>`;
+    }
+}
+
+function closeModal() {
+    document.getElementById('playerModal').style.display = 'none';
+}
+
+// 点击模态框外部关闭
+document.getElementById('playerModal').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+});
+
+// 事件绑定
+document.getElementById('searchInput').addEventListener('input', debounce(function() {
+    currentPage = 1;
+    loadPlayers();
+}, 300));
+
+document.getElementById('positionFilter').addEventListener('change', function() {
+    currentPage = 1;
+    loadPlayers();
+});
+
+document.getElementById('teamFilter').addEventListener('change', function() {
+    currentPage = 1;
+    loadPlayers();
+});
+
+document.getElementById('sortSelect').addEventListener('change', function() {
+    currentSort = this.value;
+    currentPage = 1;
+    loadPlayers();
+});
+
+document.getElementById('orderSelect').addEventListener('change', function() {
+    currentOrder = this.value;
+    currentPage = 1;
+    loadPlayers();
+});
+
+// 表头点击排序
+document.querySelectorAll('#playersTable th[data-sort]').forEach(th => {
+    th.addEventListener('click', function() {
+        const sort = this.dataset.sort;
+        if (currentSort === sort) {
+            currentOrder = currentOrder === 'desc' ? 'asc' : 'desc';
+        } else {
+            currentSort = sort;
+            currentOrder = 'desc';
+        }
+        document.getElementById('sortSelect').value = sort;
+        document.getElementById('orderSelect').value = currentOrder;
+        currentPage = 1;
+        loadPlayers();
+    });
+});
+
+// 初始加载
+loadPlayers();
+</script>
+{% endblock %}
